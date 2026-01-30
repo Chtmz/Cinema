@@ -1,5 +1,6 @@
 
 
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-xke-fu8g&#p2s5_+_(dkzv&5wg5-18+is&c*s-$wy($wnni&@t'
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
