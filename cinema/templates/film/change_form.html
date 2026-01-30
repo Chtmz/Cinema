@@ -1,0 +1,113 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const titleInput = document.getElementById("id_title");
+    if (!titleInput) return;
+
+    // Container ensuring relative positioning for the dropdown
+    const container = document.createElement("div");
+    container.style.position = "relative";
+    titleInput.parentNode.insertBefore(container, titleInput);
+    container.appendChild(titleInput);
+
+    // Suggestions dropdown
+    const dropdown = document.createElement("div");
+    dropdown.id = "tmdb-autocomplete-dropdown";
+    // Tailwind classes for styling (mimicking Unfold/Admin style)
+    dropdown.className = "absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg mt-1 hidden";
+    container.appendChild(dropdown);
+
+    let debounceTimer;
+
+    titleInput.addEventListener("input", (e) => {
+      const query = e.target.value.trim();
+      clearTimeout(debounceTimer);
+
+      if (query.length < 2) {
+        dropdown.classList.add("hidden");
+        dropdown.innerHTML = "";
+        return;
+      }
+
+      debounceTimer = setTimeout(() => {
+        fetch(`/api/tmdb/search/?q=${encodeURIComponent(query)}`)
+          .then(res => res.json())
+          .then(data => {
+            dropdown.innerHTML = "";
+            if (data.length > 0) {
+              dropdown.classList.remove("hidden");
+              data.slice(0, 5).forEach(film => {
+                const item = document.createElement("div");
+                item.className = "flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors";
+
+                const img = film.poster_url
+                  ? `<img src="${film.poster_url}" class="w-12 h-16 object-cover rounded-md shadow-sm">`
+                  : `<div class="w-12 h-16 bg-gray-200 dark:bg-gray-600 rounded-md flex items-center justify-center text-xs text-gray-500">No Img</div>`;
+
+                item.innerHTML = `
+                                    ${img}
+                                    <div class="flex-1 min-w-0">
+                                        <div class="font-medium text-gray-900 dark:text-gray-100 truncate">${film.title}</div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            ${film.release_date || 'Date inconnue'} • TMDb #${film.id}
+                                        </div>
+                                    </div>
+                                    <div class="text-xs font-semibold text-blue-600 dark:text-blue-400 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 rounded">
+                                        Importer
+                                    </div>
+                                `;
+
+                item.addEventListener("click", () => {
+                  // User chose a film, let's import it
+                  // Enhance UX: Show loading state
+                  item.innerHTML = `<div class="p-4 text-center text-sm text-gray-500 w-full">Importation en cours...</div>`;
+
+                  fetch("/api/tmdb/import/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tmdb_id: film.id })
+                  })
+                    .then(r => r.json())
+                    .then(resp => {
+                      if (resp.ok) {
+                        // Redirect to the edit page of the newly created film
+                        // We are at .../admin/cinema/film/add/
+                        // ../ID/change/ -> .../admin/cinema/film/ID/change/
+                        window.location.href = `../${resp.film_id}/change/`;
+                      } else {
+                        alert("Erreur lors de l'import : " + resp.error);
+                        dropdown.classList.add("hidden"); // Hide on error to reset
+                      }
+                    })
+                    .catch(err => {
+                      alert("Erreur réseau");
+                      console.error(err);
+                    });
+                });
+
+                dropdown.appendChild(item);
+              });
+            } else {
+              // Optional: Show "No results"
+              const noRes = document.createElement("div");
+              noRes.className = "p-3 text-sm text-gray-500 dark:text-gray-400 text-center";
+              noRes.textContent = "Aucun résultat trouvé sur TMDb";
+              dropdown.appendChild(noRes);
+              dropdown.classList.remove("hidden");
+            }
+          });
+      }, 400); // 400ms debounce
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!container.contains(e.target)) {
+        dropdown.classList.add("hidden");
+      }
+    });
+  });
+</script>
+{% endblock %}
